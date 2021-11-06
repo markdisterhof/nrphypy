@@ -8,38 +8,106 @@ import signals
 import ssb
 
 
-def decode_pss(received_data: np.ndarray) -> [int, int, int]:
-    """TODO Refactor
-    Find SSB with highest crosscorrelation to undistorted PSS available in resource grid 
-    and extract N_ID_2, k_ssb and l_ssb
+def _pss_candidates(N):
+    pss_candidates = np.zeros((3, N), dtype=complex)
+    pss_candidates[:, 56:56+127] = [signals.pss(i) for i in range(3)]
+    pss_candidates_t = [np.fft.ifft(pss_candidates[i]) for i in range(3)]
+    return pss_candidates_t
+
+
+def sync_pss(received_data: np.ndarray, fft_size: int,threshold:float, pss_candidates: np.ndarray = None) -> np.ndarray:
+    """TODO Process time domain samples to return array of 2d ssbs 
 
     Args:
-        received_data ([complex, complex]): 2D resource grid in which to search for SSB
+        received_data (np.ndarray): [description]
+        fft_size (int): [description]
 
     Returns:
-        tuple: N_ID_2, k_ssb, l_ssb
+        np.ndarray: [description]
+    """    
+    # 3x 1d vector containing each ssb nid2s, offsets in rec_data and freq offsets
+    nid2, epsilon, sample_offs = freq_time_sync(received_data= received_data,fft_size= fft_size,threshold= None,pss_candidates = pss_candidates)
+    
+    sample_cut = len(received_data)  # no of processed sample
+    if len(sample_offs) == 0:
+        return np.array([],dtype=complex),[], sample_cut
+
+    if sample_offs[len(sample_offs)-1] + 4 * fft_size > len(received_data):
+        # case received_data contains pss at the end but not rest of ssb
+        # remove from found ssbs, sample_cut is no of processed samples (to be removed from memory)
+        nid2 = nid2[:len(nid2)-1]
+        sample_cut = sample_offs[len(sample_offs)-1]
+        sample_offs = sample_offs[:len(sample_offs)-1]
+        epsilon = epsilon[:len(epsilon)-1]
+
+    
+    ssbs_f = np.zeros(shape=(len(sample_offs), 4, fft_size), dtype=complex)
+    for i, offs in enumerate(sample_offs):
+        ssbs_f[i] = received_data[offs:offs+4*fft_size].reshape(4, fft_size)
+    for i_ssb in range(len(ssbs_f)):
+        for sym in range(4):
+            ssbs_f[i_ssb,sym] *= np.exp(-1*epsilon[i_ssb]*1j*2*np.pi*np.arange(fft_size)/fft_size)
+            ssbs_f[i_ssb,sym] = np.fft.fft(ssbs_f[i_ssb,sym])
+    gr = np.array([ssbs_f[i].T for i in range(len(ssbs_f))])[:,:240,:]
+    return gr, nid2, sample_cut
+
+
+def freq_time_sync(received_data: np.ndarray, fft_size: int, threshold: float, pss_candidates: np.ndarray = None) -> [int, int, int]:
+    """TODO Conventional syncronization in time and frequency in time domain using 5g PSS as per:
+    D. Wang et al.: Novel PSS Timing Synchronization Algorithm for Cell Search in 5G NR System
+    https://ieeexplore.ieee.org/stamp/stamp.jsp?tp=&arnumber=9312170
+
+    Args:
+        received_data (np.ndarray): [description]
+
+    Returns:
+        [int, int, int]: NID2, epsilon, offset to ssb_carr0/samples
+
     """
-    rec_pss_sym = np.array(received_data)
-    nid2_candidates = np.array(
-        [signals.pss(N_ID2=n_id2) for n_id2 in range(3)])
 
-    corr = np.zeros(
-        (3, received_data.shape[0], received_data.shape[1]), dtype=complex)
+    # prepare
+    rec = np.array(received_data).flatten()
+    # if pss_candidate provided do not compute iffts again etc.
+    if pss_candidates == None:
+        pss_candidates = _pss_candidates(fft_size)
+    #
+    '''
+    B[t,n,k], where:
+    t in {0,1,2}, NID2
+    n in {0, len(rec)- len(pss_sequence)} cross-correlation sequence, which calculated starting from the n-th point of the receiving sequence
+    k in {0,..,fft_size} fft point index
+    '''
 
-    for (i, pss_i) in enumerate(nid2_candidates):
-        rgrid_mask = np.zeros(rec_pss_sym.shape, dtype=complex)
-        rgrid_mask[:240, :4
-                   ] += ssb.map_pss(pss_i)
+    mod_t = np.array([np.exp(k*1j*2*np.pi*np.arange(fft_size)/fft_size)
+                     for k in range(fft_size)])  # modulator for integer freq shift
+    B = np.zeros((len(pss_candidates), len(rec) -
+                 fft_size + 1, fft_size), dtype=float)
 
-        for l in range(received_data.shape[1]):
-            for k in range(received_data.shape[0]):
-                corr[i, k, l] = np.multiply(
-                    np.roll(
-                        np.roll(rgrid_mask, l, axis=1),
-                        k, axis=0),
-                    rec_pss_sym.real).sum()
+    for t in range(len(pss_candidates)):  # for each NID2
+        for k in range(len(B[0, 0])):  # for each carrier offset
+            B[t, :, k] = np.abs(np.correlate(
+                rec, pss_candidates[t] * mod_t[k]))
+    C = np.array([[np.max(B[t, :, i]) for i in range(fft_size)]
+                 for t in range(len(B))])
+    if threshold == None:
+        if np.average(B) <= 0.00001:
+            # avoid avg(B)== for for next if case (div by zero)
+            threshold = 1.
+        elif np.max(B)/ np.average(B)/1.1 < 10.:
+             # case only noise, no meaningful threshold, threshold higher than 
+            threshold = np.max(B) + 1.
+        else:
+            threshold = np.max(B)- np.average(B)*1.1
+    
+    peaks = np.argwhere(B >= threshold)
+    
+    if len(peaks) > 100:
+        raise Warning('threshold unreasonably low, too much memory is going to be allocated. threshold: {}, max(B): {}\ncontinuing with:{}'.format(threshold, np.max(B), np.max(B)*0.9))
+        return freq_time_sync(rec,fft_size,np.max(B)*0.9,pss_candidates)
 
-    return np.unravel_index(np.argmax(corr, axis=None), corr.shape)
+    ffo = np.angle(C[peaks[:, 0], peaks[:, 2]])/np.pi/2
+    epsilon = peaks[:, 2] + ffo
+    return [peaks[:, 0], epsilon, peaks[:, 1]]
 
 
 def pss_correlate(ofdm_sym: Union[np.ndarray, list]) -> [int, int, int]:
@@ -82,7 +150,7 @@ def decode_sss(sss_data: Union[np.ndarray, list], nid2: int) -> int:
     return int(np.argmax(corr, axis=None))
 
 
-def decode_pbch(pbch_data: Union[np.ndarray, list], L_max: int, N_ID_Cell: int, i_SSB: int) ->np.ndarray:
+def decode_pbch(pbch_data: Union[np.ndarray, list], L_max: int, N_ID_Cell: int, i_SSB: int) -> np.ndarray:
     """Extract PBCH payload bits from PBCH symbols
 
     Args:
@@ -96,7 +164,7 @@ def decode_pbch(pbch_data: Union[np.ndarray, list], L_max: int, N_ID_Cell: int, 
 
     Returns:
         np.ndarray: Descrambled PBCH bits 
-    """    
+    """
     # get bits from complex symbols
     b = signals.inv_sym_qpsk(np.array(pbch_data, dtype=complex))
     # descramble that
