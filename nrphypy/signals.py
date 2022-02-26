@@ -47,8 +47,7 @@ def pss(N_ID2: int) -> np.ndarray:
     """
 
     d_pss = np.zeros(127, dtype=int)
-    x = np.array([0, 1, 1, 0, 1, 1, 1], dtype=int)
-    x.resize(127)
+    x = np.resize([0, 1, 1, 0, 1, 1, 1], 127)
 
     for i in range(len(x)-7):
         x[i+7] = (x[i+4] + x[i]) % 2
@@ -67,13 +66,11 @@ def sss(N_ID1: int, N_ID2: int) -> np.ndarray:
         N_ID1 (int): Cell ID group
         N_ID2 (int): Cell ID sector
 
-    Returns:
+Returns:
         np.ndarray: Secondary synchronization signal sequence (127 symbols in {-1,1})
     """
-    x_0 = np.array([1, 0, 0, 0, 0, 0, 0], int)
-    x_0.resize(127)
-    x_1 = np.array([1, 0, 0, 0, 0, 0, 0], int)
-    x_1.resize(127)
+    x_0 = np.resize([1, 0, 0, 0, 0, 0, 0], 127)
+    x_1 = np.resize([1, 0, 0, 0, 0, 0, 0], 127)
     m_0 = 15*(N_ID1//112) + 5 * N_ID2
     m_1 = N_ID1 % 112
 
@@ -117,8 +114,7 @@ def dmrs(i_ssb: int, N_ID_Cell: int, L_max: int, n_hf: bool = False) -> np.ndarr
 
     r = np.zeros(M, dtype=complex)
     for m in range(M):
-        r[m] = (1 - 2 * c[2 * m] + (1 - 2 * c[2 * m + 1]) * 1j) / \
-            np.sqrt(2)  # compute complex symbols
+        r[m] = (1 - 2 * c[2 * m] + (1 - 2 * c[2 * m + 1]) * 1j) / np.sqrt(2)  # compute complex symbols
     return r
 
 
