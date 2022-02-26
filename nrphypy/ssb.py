@@ -76,7 +76,7 @@ def map_pbch(data_pbch: Union[np.ndarray, list], data_dmrs: Union[np.ndarray, li
     data_dmrs = np.array(data_dmrs, dtype=complex) * beta_dmrs
     mask = np.zeros((240, 4), dtype=complex)
 
-    for l in range(1, 4):
+    for l in range(1, 4):   
         k_range = range(240)
         if l == 2:
             k_range = np.concatenate((range(48), range(192, 240)))
@@ -320,8 +320,7 @@ def get_sync_resource_grid_pbch(N_RB: int, N_ID1: int, N_ID2: int, k_ssb: int, m
     L_max = len(ids)
     res_grid = np.zeros(shape=(N_SC, N_SYMB), dtype=complex)
 
-    pbch_data = np.array(pbch_data)
-    pbch_data.resize(L_max*864)
+    pbch_data = np.resize(pbch_data, L_max*864)
     pbch_data_arr = pbch_data.reshape(L_max, 864)
 
     for i_ssb, idx in enumerate(ids):
