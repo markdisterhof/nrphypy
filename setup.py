@@ -2,7 +2,7 @@ from setuptools import setup
 
 setup(
     name='nrphypy',
-    version='0.9.4',    
+    version='0.9.9',    
     description='Python module for 5G NR sync signals and decoding',
     url='https://github.com/markdisterhof/nrphypy',
     author='Mark Disterhof',
