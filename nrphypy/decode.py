@@ -95,7 +95,7 @@ def freq_time_sync(received_data: np.ndarray, fft_size: int, threshold: float, p
                  for t in range(len(B))])
     if threshold == None:
         if np.average(B) <= 0.00001:
-            # avoid avg(B)== for for next if case (div by zero)
+            # avoid avg^{Cell}(B)== 0 for next if case (div by zero)
             threshold = 1.
         elif np.max(B) / np.average(B)/1.1 < 10.:
             # case only noise, no meaningful threshold, threshold higher than
