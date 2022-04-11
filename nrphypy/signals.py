@@ -53,9 +53,9 @@ def pss(N_ID2: int) -> np.ndarray:
         x[i+7] = (x[i+4] + x[i]) % 2
 
     for n in range(len(d_pss)):
-        d_pss[n] = 1-2*x[(n+43*N_ID2) % 127]
+        d_pss[n] = x[(n+43*N_ID2) % 127]
 
-    return d_pss
+    return bpsk(d_pss)
 
 
 def sss(N_ID1: int, N_ID2: int) -> np.ndarray:
@@ -80,9 +80,9 @@ Returns:
 
     d_sss = np.zeros(127, dtype=int)
     for n in range(len(d_sss)):
-        d_sss[n] = (1-2*x_0[(n+m_0) % 127])*(1-2*x_1[(n+m_1) % 127])
+        d_sss[n] = (x_0[(n+m_0) % 127])*(x_1[(n+m_1) % 127])
 
-    return d_sss
+    return bpsk(d_sss)
 
 
 def dmrs(i_ssb: int, N_ID_Cell: int, L_max: int, n_hf: bool = False) -> np.ndarray:
@@ -188,3 +188,10 @@ def inv_sym_qpsk(c: Union[np.ndarray, list]) -> np.ndarray:
         [[int(np.round(np.real(i)*np.sqrt(2))), int(np.round(np.imag(i)*np.sqrt(2)))] for i in c], dtype=int
     ).flatten()
     return np.array([(1-b_i)//2 for b_i in b_], dtype=int)
+
+def bpsk(b: Union[np.ndarray, list]) -> np.ndarray:
+    b = np.array(b, dtype=complex).flatten()  # weird python type error in gr
+    return np.array([1/np.sqrt(2) * ((1-2*b_i)+1j*(1-2*b_i)) for b_i in b])
+
+def inv_bpsk(b: Union[np.ndarray, list]) -> np.ndarray:
+    return np.array([np.abs(bpsk([0,1]) - b_i).argmin() for b_i in b])
