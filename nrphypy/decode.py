@@ -53,7 +53,7 @@ def sync_pss(received_data: np.ndarray, fft_size: int, threshold: float, pss_can
     return gr, nid2, sample_cut, sample_offs
 
 
-def freq_time_sync(received_data: np.ndarray, fft_size: int, threshold: float, pss_candidates: np.ndarray = None) -> [int, int, int]:
+def freq_time_sync(received_data: np.ndarray, fft_size: int, threshold: float, pss_candidates: np.ndarray = None):
     """TODO Conventional syncronization in time and frequency in time domain using 5g PSS as per:
     D. Wang et al.: Novel PSS Timing Synchronization Algorithm for Cell Search in 5G NR System
     https://ieeexplore.ieee.org/stamp/stamp.jsp?tp=&arnumber=9312170
